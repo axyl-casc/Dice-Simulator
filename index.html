@@ -82,7 +82,7 @@
 
     .dice-row {
       display: grid;
-      grid-template-columns: 90px 60px 200px auto;
+      grid-template-columns: 90px 60px minmax(120px, 1fr) minmax(120px, 1fr) auto;
       gap: 0.75rem;
       align-items: center;
       margin-bottom: 0.7rem;
@@ -140,7 +140,7 @@
 
     @media (max-width: 860px) {
       .two-col { grid-template-columns: 1fr; }
-      .dice-row { grid-template-columns: 1fr 1fr 1fr auto; }
+      .dice-row { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
     }
 
     @media (max-width: 640px) {
@@ -163,7 +163,7 @@
     <section class="view active" id="view-builder">
       <div class="card">
         <h2>Build your hand</h2>
-        <p class="muted">Format: <strong>Dice1 +/- Dice2 +/- Dice3...</strong>. Set each die's sides and sign, then run 1000 rolls.</p>
+        <p class="muted">Format: <strong>Dice1 +/- Dice2 +/- Dice3...</strong>. Set each die's sign and value range (min/max), then run simulations.</p>
 
         <div id="diceList"></div>
 
@@ -250,8 +250,8 @@
       });
     }
 
-    function addDie(sign = 1, sides = 6) {
-      appState.dice.push({ sign, sides });
+    function addDie(sign = 1, min = 1, max = 6) {
+      appState.dice.push({ sign, min, max });
       renderDiceList();
     }
 
@@ -273,8 +273,12 @@
             <option value="-1" ${die.sign === -1 ? 'selected' : ''}>-</option>
           </select>
           <label>
-            <span class="muted">Sides</span>
-            <input type="number" min="2" max="1000" step="1" value="${die.sides}" data-index="${index}" data-field="sides" aria-label="Sides" />
+            <span class="muted">Min</span>
+            <input type="number" min="-1000" max="1000" step="1" value="${die.min}" data-index="${index}" data-field="min" aria-label="Minimum face value" />
+          </label>
+          <label>
+            <span class="muted">Max</span>
+            <input type="number" min="-1000" max="1000" step="1" value="${die.max}" data-index="${index}" data-field="max" aria-label="Maximum face value" />
           </label>
           <button class="btn danger" data-remove="${index}">Remove</button>
         `;
@@ -287,7 +291,7 @@
     function formatHand(dice) {
       return dice
         .map((die, i) => {
-          const token = `d${die.sides}`;
+          const token = `[${die.min}..${die.max}]`;
           if (i === 0) {
             return die.sign === -1 ? `-${token}` : token;
           }
@@ -298,7 +302,7 @@
 
     function rollOnce() {
       return appState.dice.reduce((sum, die) => {
-        const d = new Dice(1, die.sides);
+        const d = new Dice(die.min, die.max);
         return sum + (d.roll() * die.sign);
       }, 0);
     }
@@ -322,7 +326,7 @@
       dice.forEach(die => {
         const next = new Map();
         for (const [sum, count] of distribution.entries()) {
-          for (let face = 1; face <= die.sides; face += 1) {
+          for (let face = die.min; face <= die.max; face += 1) {
             const value = sum + die.sign * face;
             next.set(value, (next.get(value) || 0) + count);
           }
@@ -330,7 +334,7 @@
         distribution = next;
       });
 
-      const totalOutcomes = dice.reduce((acc, die) => acc * die.sides, 1);
+      const totalOutcomes = dice.reduce((acc, die) => acc * (die.max - die.min + 1), 1);
       return { distribution, totalOutcomes };
     }
 
@@ -381,14 +385,15 @@
         paper_bgcolor: '#111827',
         plot_bgcolor: '#111827',
         font: { color: '#f9fafb' },
-        margin: { t: 25, r: 10, b: 50, l: 45 },
+        margin: { t: 25, r: 90, b: 50, l: 55 },
         xaxis: { title: 'Result Total' },
-        yaxis: { title: 'Frequency (1000 rolls)' },
+        yaxis: { title: `Frequency (${n} rolls)`, automargin: true },
         yaxis2: {
           title: 'Approx. Odds (1 in X)',
           overlaying: 'y',
           side: 'right',
           autorange: 'reversed',
+          automargin: true,
         },
         legend: { orientation: 'h', y: 1.12, x: 0 },
       }, { responsive: true });
@@ -417,7 +422,7 @@
       });
     }
 
-    document.getElementById('addDieBtn').addEventListener('click', () => addDie(1, 6));
+    document.getElementById('addDieBtn').addEventListener('click', () => addDie(1, 1, 6));
 
     document.getElementById('clearDiceBtn').addEventListener('click', () => {
       appState.dice = [];
@@ -435,9 +440,13 @@
         return;
       }
 
-      const invalid = appState.dice.some(d => !Number.isInteger(d.sides) || d.sides < 2);
+      const invalid = appState.dice.some(d => {
+        const isIntBounds = Number.isInteger(d.min) && Number.isInteger(d.max);
+        const hasRange = d.max >= d.min;
+        return !isIntBounds || !hasRange;
+      });
       if (invalid) {
-        alert('Each die must have at least 2 sides.');
+        alert('Each die must use integer bounds where max is greater than or equal to min.');
         return;
       }
 
@@ -459,8 +468,8 @@
       const field = target.dataset.field;
       if (Number.isNaN(index) || !field) return;
 
-      if (field === 'sides') {
-        appState.dice[index].sides = Number(target.value);
+      if (field === 'min' || field === 'max') {
+        appState.dice[index][field] = Number(target.value);
       }
 
       if (field === 'sign') {
@@ -489,8 +498,8 @@
       }
     });
 
-    addDie(1, 6);
-    addDie(1, 6);
+    addDie(1, 1, 6);
+    addDie(1, 1, 6);
   </script>
 </body>
 </html>
