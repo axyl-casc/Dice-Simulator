@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dice Simulator</title>
+  <script src="https://cdn.plot.ly/plotly-3.3.0.min.js" charset="utf-8"></script>
+  <style>
+    :root {
+      --bg: #111827;
+      --panel: #1f2937;
+      --panel-2: #111827;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --accent: #22d3ee;
+      --danger: #f43f5e;
+      --ok: #34d399;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 20% 0%, #1f2937, #0b1020 50%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .container {
+      width: min(1100px, 92vw);
+      margin: 0 auto;
+      padding: 1.5rem 0 3rem;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(1.4rem, 2vw, 2rem);
+      letter-spacing: 0.02em;
+    }
+
+    .nav {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 0.6rem;
+      padding: 0.55rem 0.85rem;
+      background: #374151;
+      color: var(--text);
+      cursor: pointer;
+      transition: 160ms ease;
+      font-weight: 600;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn.active { background: #06b6d4; color: #042f2e; }
+    .btn.primary { background: var(--accent); color: #062d35; }
+    .btn.danger { background: var(--danger); }
+
+    .card {
+      background: linear-gradient(145deg, #1f2937, #111827);
+      border: 1px solid #374151;
+      border-radius: 1rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 20px 50px -35px black;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .dice-row {
+      display: grid;
+      grid-template-columns: 90px 60px 200px auto;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 0.7rem;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 0.7rem;
+      padding: 0.65rem;
+    }
+
+    select,
+    input[type="number"] {
+      width: 100%;
+      background: #111827;
+      color: var(--text);
+      border: 1px solid #4b5563;
+      border-radius: 0.5rem;
+      padding: 0.45rem 0.5rem;
+    }
+
+    .hand-preview {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-top: 0.3rem;
+    }
+
+    .control-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1rem;
+    }
+
+    #resultsTable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    #resultsTable th,
+    #resultsTable td {
+      border-bottom: 1px solid #334155;
+      text-align: left;
+      padding: 0.5rem;
+    }
+
+    #resultsTable th { color: #67e8f9; }
+
+    .muted { color: var(--muted); }
+
+    @media (max-width: 860px) {
+      .two-col { grid-template-columns: 1fr; }
+      .dice-row { grid-template-columns: 1fr 1fr 1fr auto; }
+    }
+
+    @media (max-width: 640px) {
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .dice-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <h1 class="title">🎲 Dice Hand Simulator</h1>
+      <nav class="nav">
+        <button class="btn active" data-view-btn="builder">Simulator</button>
+        <button class="btn" data-view-btn="results">Results</button>
+        <button class="btn" data-view-btn="about">About</button>
+      </nav>
+    </header>
+
+    <section class="view active" id="view-builder">
+      <div class="card">
+        <h2>Build your hand</h2>
+        <p class="muted">Format: <strong>Dice1 +/- Dice2 +/- Dice3...</strong>. Set each die's sides and sign, then run 1000 rolls.</p>
+
+        <div id="diceList"></div>
+
+        <div class="control-row">
+          <label>
+            <span class="muted"># of rolls</span>
+            <input type="number" id="rollCountInput" min="1" max="1000000" step="1" value="1000" aria-label="Number of rolls" />
+          </label>
+          <button class="btn" id="addDieBtn">+ Add Die</button>
+          <button class="btn danger" id="clearDiceBtn">Reset Hand</button>
+          <button class="btn primary" id="rollBtn">Roll Simulations</button>
+        </div>
+
+        <p class="hand-preview" id="handPreview"></p>
+      </div>
+    </section>
+
+    <section class="view" id="view-results">
+      <div class="card two-col">
+        <div>
+          <h2>Distribution</h2>
+          <div id="chart" style="height: 420px;"></div>
+        </div>
+        <div>
+          <h2>Summary</h2>
+          <p id="summaryText" class="muted">Run a simulation to see results.</p>
+          <div id="dictionaryBox" class="muted"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Results + Approximate Odds</h2>
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>Total</th>
+              <th>Frequency (out of 1000)</th>
+              <th>Simulated Probability</th>
+              <th>Approx. Odds (Theory)</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="view" id="view-about">
+      <div class="card">
+        <h2>About</h2>
+        <p>
+          This app is a single-page vanilla JavaScript dice simulator. You can create a custom hand of dice,
+          choose whether each die is additive or subtractive, and run 1000 random rolls.
+        </p>
+        <p>
+          It reports both <strong>simulation frequencies</strong> and a <strong>theoretical approximation</strong>
+          based on exact combination counting for your selected dice (e.g., for 2d6, 7 appears ~1/6, and each
+          specific pair has 1/36 chance).
+        </p>
+        <p class="muted">Built with HTML, CSS, vanilla JS, and Plotly.</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="dice.js"></script>
+  <script>
+    const diceListEl = document.getElementById('diceList');
+    const handPreviewEl = document.getElementById('handPreview');
+    const resultsBodyEl = document.getElementById('resultsBody');
+    const summaryTextEl = document.getElementById('summaryText');
+    const dictionaryBoxEl = document.getElementById('dictionaryBox');
+    const rollCountInputEl = document.getElementById('rollCountInput');
+
+    const appState = {
+      dice: [],
+      lastResult: null,
+      simulations: 1000,
+    };
+
+    function switchView(view) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelector(`#view-${view}`).classList.add('active');
+      document.querySelectorAll('[data-view-btn]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.viewBtn === view);
+      });
+    }
+
+    function addDie(sign = 1, sides = 6) {
+      appState.dice.push({ sign, sides });
+      renderDiceList();
+    }
+
+    function renderDiceList() {
+      diceListEl.innerHTML = '';
+
+      if (appState.dice.length === 0) {
+        handPreviewEl.textContent = 'No dice selected yet.';
+        return;
+      }
+
+      appState.dice.forEach((die, index) => {
+        const row = document.createElement('div');
+        row.className = 'dice-row';
+        row.innerHTML = `
+          <strong>Dice ${index + 1}</strong>
+          <select data-index="${index}" data-field="sign" aria-label="Sign">
+            <option value="1" ${die.sign === 1 ? 'selected' : ''}>+</option>
+            <option value="-1" ${die.sign === -1 ? 'selected' : ''}>-</option>
+          </select>
+          <label>
+            <span class="muted">Sides</span>
+            <input type="number" min="2" max="1000" step="1" value="${die.sides}" data-index="${index}" data-field="sides" aria-label="Sides" />
+          </label>
+          <button class="btn danger" data-remove="${index}">Remove</button>
+        `;
+        diceListEl.appendChild(row);
+      });
+
+      handPreviewEl.textContent = `Hand: ${formatHand(appState.dice)}`;
+    }
+
+    function formatHand(dice) {
+      return dice
+        .map((die, i) => {
+          const token = `d${die.sides}`;
+          if (i === 0) {
+            return die.sign === -1 ? `-${token}` : token;
+          }
+          return `${die.sign === -1 ? '-' : '+'} ${token}`;
+        })
+        .join(' ');
+    }
+
+    function rollOnce() {
+      return appState.dice.reduce((sum, die) => {
+        const d = new Dice(1, die.sides);
+        return sum + (d.roll() * die.sign);
+      }, 0);
+    }
+
+    function runSimulation() {
+      const frequencies = {};
+      const n = appState.simulations;
+
+      for (let i = 0; i < n; i += 1) {
+        const total = rollOnce();
+        frequencies[total] = (frequencies[total] || 0) + 1;
+      }
+
+      const theoretical = computeTheoreticalDistribution(appState.dice);
+      return { frequencies, theoretical, n };
+    }
+
+    function computeTheoreticalDistribution(dice) {
+      let distribution = new Map([[0, 1]]);
+
+      dice.forEach(die => {
+        const next = new Map();
+        for (const [sum, count] of distribution.entries()) {
+          for (let face = 1; face <= die.sides; face += 1) {
+            const value = sum + die.sign * face;
+            next.set(value, (next.get(value) || 0) + count);
+          }
+        }
+        distribution = next;
+      });
+
+      const totalOutcomes = dice.reduce((acc, die) => acc * die.sides, 1);
+      return { distribution, totalOutcomes };
+    }
+
+    function oddsString(count, total) {
+      if (!count || !total) return 'N/A';
+      const ratio = total / count;
+      if (!Number.isFinite(ratio)) return 'N/A';
+      return `1/${ratio.toFixed(2)}`;
+    }
+
+    function renderResults({ frequencies, theoretical, n }) {
+      const keys = Object.keys(frequencies).map(Number).sort((a, b) => a - b);
+
+      if (keys.length === 0) {
+        summaryTextEl.textContent = 'No results yet.';
+        return;
+      }
+
+      const x = keys;
+      const y = keys.map(k => frequencies[k]);
+      const theoryProbability = keys.map(k => {
+        const theoryCount = theoretical.distribution.get(k) || 0;
+        return theoryCount / theoretical.totalOutcomes;
+      });
+      const theoryOdds = keys.map((_, i) => {
+        const prob = theoryProbability[i];
+        return prob > 0 ? (1 / prob) : null;
+      });
+
+      Plotly.newPlot('chart', [{
+        x,
+        y,
+        type: 'bar',
+        name: 'Simulated Frequency',
+        marker: { color: '#22d3ee' },
+        hovertemplate: 'Total %{x}<br>Count %{y}<extra></extra>',
+      }, {
+        x,
+        y: theoryOdds,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Approx. Odds (1 in X)',
+        yaxis: 'y2',
+        marker: { color: '#f59e0b', size: 7 },
+        line: { color: '#f59e0b', width: 2 },
+        hovertemplate: 'Total %{x}<br>Approx. Odds 1/%{y:.2f}<extra></extra>',
+      }], {
+        paper_bgcolor: '#111827',
+        plot_bgcolor: '#111827',
+        font: { color: '#f9fafb' },
+        margin: { t: 25, r: 10, b: 50, l: 45 },
+        xaxis: { title: 'Result Total' },
+        yaxis: { title: 'Frequency (1000 rolls)' },
+        yaxis2: {
+          title: 'Approx. Odds (1 in X)',
+          overlaying: 'y',
+          side: 'right',
+          autorange: 'reversed',
+        },
+        legend: { orientation: 'h', y: 1.12, x: 0 },
+      }, { responsive: true });
+
+      const entries = keys.map(k => `${k}: ${frequencies[k]}`);
+      dictionaryBoxEl.textContent = `results = { ${entries.join(', ')} }`;
+
+      const min = keys[0];
+      const max = keys[keys.length - 1];
+      summaryTextEl.textContent = `Hand ${formatHand(appState.dice)} rolled ${n} times. Observed range: ${min} to ${max}.`;
+
+      resultsBodyEl.innerHTML = '';
+      keys.forEach(total => {
+        const freq = frequencies[total];
+        const simProb = freq / n;
+        const theoryCount = theoretical.distribution.get(total) || 0;
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${total}</td>
+          <td>${freq}</td>
+          <td>${(simProb * 100).toFixed(2)}%</td>
+          <td>${oddsString(theoryCount, theoretical.totalOutcomes)}</td>
+        `;
+        resultsBodyEl.appendChild(row);
+      });
+    }
+
+    document.getElementById('addDieBtn').addEventListener('click', () => addDie(1, 6));
+
+    document.getElementById('clearDiceBtn').addEventListener('click', () => {
+      appState.dice = [];
+      appState.lastResult = null;
+      renderDiceList();
+      resultsBodyEl.innerHTML = '';
+      dictionaryBoxEl.textContent = '';
+      summaryTextEl.textContent = 'Run a simulation to see results.';
+      Plotly.purge('chart');
+    });
+
+    document.getElementById('rollBtn').addEventListener('click', () => {
+      if (appState.dice.length === 0) {
+        alert('Add at least one die to run a simulation.');
+        return;
+      }
+
+      const invalid = appState.dice.some(d => !Number.isInteger(d.sides) || d.sides < 2);
+      if (invalid) {
+        alert('Each die must have at least 2 sides.');
+        return;
+      }
+
+      const parsedRollCount = Number(rollCountInputEl.value);
+      if (!Number.isInteger(parsedRollCount) || parsedRollCount < 1) {
+        alert('Number of rolls must be an integer greater than 0.');
+        return;
+      }
+      appState.simulations = parsedRollCount;
+
+      appState.lastResult = runSimulation();
+      renderResults(appState.lastResult);
+      switchView('results');
+    });
+
+    diceListEl.addEventListener('input', e => {
+      const target = e.target;
+      const index = Number(target.dataset.index);
+      const field = target.dataset.field;
+      if (Number.isNaN(index) || !field) return;
+
+      if (field === 'sides') {
+        appState.dice[index].sides = Number(target.value);
+      }
+
+      if (field === 'sign') {
+        appState.dice[index].sign = Number(target.value);
+      }
+
+      renderDiceList();
+    });
+
+    diceListEl.addEventListener('click', e => {
+      const target = e.target;
+      if (target.dataset.remove == null) return;
+      const index = Number(target.dataset.remove);
+      appState.dice.splice(index, 1);
+      renderDiceList();
+    });
+
+    document.querySelectorAll('[data-view-btn]').forEach(btn => {
+      btn.addEventListener('click', () => switchView(btn.dataset.viewBtn));
+    });
+
+    rollCountInputEl.addEventListener('input', () => {
+      const value = Number(rollCountInputEl.value);
+      if (Number.isInteger(value) && value > 0) {
+        appState.simulations = value;
+      }
+    });
+
+    addDie(1, 6);
+    addDie(1, 6);
+  </script>
+</body>
+</html>
