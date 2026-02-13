@@ -259,7 +259,7 @@
       diceListEl.innerHTML = '';
 
       if (appState.dice.length === 0) {
-        handPreviewEl.textContent = 'No dice selected yet.';
+        updateHandPreview();
         return;
       }
 
@@ -284,6 +284,15 @@
         `;
         diceListEl.appendChild(row);
       });
+
+      updateHandPreview();
+    }
+
+    function updateHandPreview() {
+      if (appState.dice.length === 0) {
+        handPreviewEl.textContent = 'No dice selected yet.';
+        return;
+      }
 
       handPreviewEl.textContent = `Hand: ${formatHand(appState.dice)}`;
     }
@@ -470,13 +479,13 @@
 
       if (field === 'min' || field === 'max') {
         appState.dice[index][field] = Number(target.value);
+        updateHandPreview();
       }
 
       if (field === 'sign') {
         appState.dice[index].sign = Number(target.value);
+        renderDiceList();
       }
-
-      renderDiceList();
     });
 
     diceListEl.addEventListener('click', e => {
